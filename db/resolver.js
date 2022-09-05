@@ -43,6 +43,12 @@ const resolvers = {
       } catch (error) {
         console.log(error);
       }
+    },
+    getClient: async (_,{id}, ctx) => {
+      const client = await Client.findById(id);
+      if(!client) throw new Error("Client not exist");
+      if(client.seller.toString() !== ctx.user.id) throw new Error("You don't have the credentials")
+      return client;
     }
   },
   Mutation: {
@@ -108,6 +114,34 @@ const resolvers = {
       }
     
     },
+    updateClient: async(_, {id, input}, ctx) => {
+      let client = await Client.findById(id);
+      if(!client) throw new Error("Client not exist");
+      if(client.seller.toString() !== ctx.user.id) throw new Error("You don't have the credentials")
+      client = await Client.findByIdAndUpdate({_id: id}, input,{new: true})
+      return client;
+    },
+    deteleClient: async (_,{id}, ctx) => {
+      let client = await Client.findById(id);
+      if(!client) throw new Error("Client not exist");
+      if(client.seller.toString() !== ctx.user.id) throw new Error("You don't have the credentials")
+      await Client.findOneAndDelete({_id: id})
+      return "Client deleted"
+    },
+    newOrder: async(_,{input}, ctx) => {
+      const { client } = input;
+      let clientExist = await Client.findById(client);
+      if(!clientExist) throw new Error("This client does not exist")
+      if(clientExist.seller.toString() !== ctx.user.id) throw new Error("You don't have the credentials");
+      //stock
+      input.order.forEach( async item => {
+        const {id} = item;
+        const product = await Product.findById(id);
+        if(item > product.stock){
+
+        }
+      } )
+    }
   },
 };
 
