@@ -1,5 +1,6 @@
 const User = require("../models/user");
 const Product = require("../models/product");
+const Order = require("../models/order");
 const Client = require("../models/client");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -36,19 +37,48 @@ const resolvers = {
         console.log(error);
       }
     },
-    getClientsSeller: async (_,{}, ctx) => {
+    getClientsSeller: async (_, {}, ctx) => {
       try {
-        const clients = await Client.find({ seller: ctx.user.id.toString()});
+        const clients = await Client.find({ seller: ctx.user.id.toString() });
         return clients;
       } catch (error) {
         console.log(error);
       }
     },
-    getClient: async (_,{id}, ctx) => {
+    getClient: async (_, { id }, ctx) => {
       const client = await Client.findById(id);
-      if(!client) throw new Error("Client not exist");
-      if(client.seller.toString() !== ctx.user.id) throw new Error("You don't have the credentials")
+      if (!client) throw new Error("Client not exist");
+      if (client.seller.toString() !== ctx.user.id)
+        throw new Error("You don't have the credentials");
       return client;
+    },
+    getOrders: async () => {
+      try {
+        const orders = await Order.find({});
+        return orders;
+      } catch (error) {
+        console.log(error);
+      }
+    },
+    getOrdersSeller: async (_, {}, ctx) => {
+      try {
+        const orders = await Order.find({ seller: ctx.user.id });
+        return orders;
+      } catch (error) {
+        console.log(error);
+      }
+    },
+    getOrder: async (_, { id }, ctx) => {
+      const order = await Order.findById(id);
+      if (!order) throw new Error("Order not exist");
+      if (order.seller.toString() !== ctx.user.id) {
+        throw new Error("You don't have a credentials");
+      }
+      return order;
+    },
+    getOrdersStatus: async (_, {status}, ctx) => {
+      const orders = await Order.find({ seller: ctx.user.id , status});
+      return orders;
     }
   },
   Mutation: {
@@ -98,50 +128,98 @@ const resolvers = {
       await Product.findOneAndDelete({ _id: id });
       return "Product deleted successfully";
     },
-    newClient: async(_, {input}, ctx) => {
-      console.log(ctx,'context');
-      const { email} = input;
-      const client = await Client.findOne({email});
-      if(client) throw new Error("Client is already exists");
+    newClient: async (_, { input }, ctx) => {
+      const { email } = input;
+      const client = await Client.findOne({ email });
+      if (client) throw new Error("Client is already exists");
       const newClient = new Client(input);
       newClient.seller = ctx.user.id;
       try {
-      
         const result = await newClient.save();
         return result;
       } catch (error) {
-          console.log(error);
+        console.log(error);
       }
-    
     },
-    updateClient: async(_, {id, input}, ctx) => {
+    updateClient: async (_, { id, input }, ctx) => {
       let client = await Client.findById(id);
-      if(!client) throw new Error("Client not exist");
-      if(client.seller.toString() !== ctx.user.id) throw new Error("You don't have the credentials")
-      client = await Client.findByIdAndUpdate({_id: id}, input,{new: true})
+      if (!client) throw new Error("Client not exist");
+      if (client.seller.toString() !== ctx.user.id)
+        throw new Error("You don't have the credentials");
+      client = await Client.findByIdAndUpdate({ _id: id }, input, {
+        new: true,
+      });
       return client;
     },
-    deteleClient: async (_,{id}, ctx) => {
+    deteleClient: async (_, { id }, ctx) => {
       let client = await Client.findById(id);
-      if(!client) throw new Error("Client not exist");
-      if(client.seller.toString() !== ctx.user.id) throw new Error("You don't have the credentials")
-      await Client.findOneAndDelete({_id: id})
-      return "Client deleted"
+      if (!client) throw new Error("Client not exist");
+      if (client.seller.toString() !== ctx.user.id)
+        throw new Error("You don't have the credentials");
+      await Client.findOneAndDelete({ _id: id });
+      return "Client deleted";
     },
-    newOrder: async(_,{input}, ctx) => {
+    newOrder: async (_, { input }, ctx) => {
       const { client } = input;
       let clientExist = await Client.findById(client);
-      if(!clientExist) throw new Error("This client does not exist")
-      if(clientExist.seller.toString() !== ctx.user.id) throw new Error("You don't have the credentials");
+      if (!clientExist) throw new Error("This client does not exist");
+      if (clientExist.seller.toString() !== ctx.user.id)
+        throw new Error("You don't have the credentials");
       //stock
-      input.order.forEach( async item => {
-        const {id} = item;
+      for await (const item of input.order) {
+        const { id } = item;
         const product = await Product.findById(id);
-        if(item > product.stock){
-
+        if (item.amount > product.stock) {
+          throw new Error("this article is not available");
+        } else {
+          product.stock = product.stock - item.amount;
+          await product.save();
         }
-      } )
-    }
+      }
+      // create order
+      const newOrder = new Order(input);
+      newOrder.seller = ctx.user.id;
+      const result = await newOrder.save();
+      return result;
+    },
+    updateOrder: async (_, { id, input }, ctx) => {
+      const { client } = input;
+      const order = await Order.findById(id);
+      if (!order) throw new Error("Order not exist");
+      const clientExist = await Client.findById(client);
+      if (!clientExist) throw new Error("This client does not exist");
+      if (clientExist.seller.toString() !== ctx.user.id)
+        throw new Error("You don't have the credentials");
+      //stock validate order
+      if (input.order) {
+        for await (const item of input.order) {
+          const { id, amount } = item;
+          const product = await Product.findById(id);
+          if (item.amount > product.stock) {
+            throw new Error("this article is not available");
+          } else {
+            const previousQuantity = order.order.find(
+              (item) => item.id === id
+            ).amount;
+            product.stock = product.stock + previousQuantity - item.amount;
+            await product.save();
+          }
+        }
+      }
+      // update order
+      const result = await Order.findOneAndUpdate({ _id: id }, input, {
+        new: true,
+      });
+      return result;
+    },
+    deleteOrder: async (_, { id }, ctx) => {
+      let order = await Order.findById(id);
+      if (!order) throw new Error("Order not exist");
+      if (order.seller.toString() !== ctx.user.id)
+        throw new Error("You don't have the credentials");
+      await Order.findOneAndDelete({ _id: id });
+      return "Order is deleted";
+    },
   },
 };
 
