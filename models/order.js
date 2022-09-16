@@ -11,7 +11,7 @@ const OrderSchema =  mongoose.Schema({
     },
     client : {
       type: mongoose.Schema.Types.ObjectId,
-      required: true,
+      required: [true,'No empty input'],
       ref: 'Client'
     },
     seller : {

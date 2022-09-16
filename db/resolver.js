@@ -76,9 +76,64 @@ const resolvers = {
       }
       return order;
     },
-    getOrdersStatus: async (_, {status}, ctx) => {
-      const orders = await Order.find({ seller: ctx.user.id , status});
+    getOrdersStatus: async (_, { status }, ctx) => {
+      const orders = await Order.find({ seller: ctx.user.id, status });
       return orders;
+    },
+    bestClients: async () => {
+      const sellers = await Order.aggregate([
+        { $match: { status: "COMPLETED" } },
+        {
+          $group: {
+            _id: "$client",
+            total: { $sum: "$total" },
+          },
+        },
+        {
+          $lookup: {
+            from: "clients", // model
+            localField: "id",
+            foreignField: "id",
+            as: "client",
+          },
+        },
+        {
+          $sort: { total: -1 },
+        },
+      ]);
+
+      return sellers;
+    },
+    bestSellers: async () => {
+      const clients = await Order.aggregate([
+        { $match: { status: "COMPLETED" } },
+        {
+          $group: {
+            _id: "$seller",
+            total: { $sum: "$total" },
+          },
+        },
+        {
+          $lookup: {
+            from: "users", // model
+            localField: "_id",
+            foreignField: "_id",
+            as: "seller",
+          },
+        },
+        {
+          $limit: 5,
+        },
+        {
+          $sort: { total: -1 },
+        },
+      ]);
+
+      return clients;
+    },
+    searchProduct: async(_, {text}) => {
+      const products = await Product.find({ $text: {$search: text}}).limit(10);
+      return products
     }
   },
   Mutation: {

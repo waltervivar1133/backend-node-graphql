@@ -4,6 +4,7 @@ const { gql } = require("apollo-server");
 
 const typeDefs = gql`
   type User {
+    _id: ID
     id: ID
     name: String
     surname: String
@@ -41,6 +42,14 @@ const typeDefs = gql`
   type OrderGroup {
     id: ID
     amount: Int
+  }
+  type TopClient {
+    total: Float
+    client: [Client]
+  }
+  type TopSeller {
+    total: Float
+    seller: [User]
   }
   input UserInput {
     name: String!
@@ -97,6 +106,11 @@ const typeDefs = gql`
     getOrdersSeller: [Order]
     getOrder(id: ID!): Order
     getOrdersStatus(status: String): [Order]
+
+    #Advanced searches
+    bestClients: [TopClient]
+    bestSellers: [TopSeller]
+    searchProduct(text: String!): [Product]
   }
   type Mutation {
     # Users
