@@ -140,7 +140,7 @@ const resolvers = {
     newUser: async (_, { input }) => {
       const { email, password } = input;
       const userExists = await User.findOne({ email });
-      if (userExists) throw new Error("user already exists");
+      if (userExists) throw new Error("El usuario ya existe");
       const salt = bcrypt.genSaltSync(10);
       input.password = bcrypt.hashSync(password, salt);
       try {
